@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { X, ExternalLink, Globe, TrendingUp } from 'lucide-react';
 
-const WeatherNews = ({ onClose, cityName, countryName }) => {
+const WeatherNews = ({ onClose, cityName, countryName, isPage = false }) => {
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -127,16 +127,16 @@ const WeatherNews = ({ onClose, cityName, countryName }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className={isPage ? '' : 'fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (!isPage && e.target === e.currentTarget && onClose) onClose();
       }}
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
+        initial={{ scale: isPage ? 1 : 0.9, opacity: isPage ? 1 : 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+        exit={{ scale: isPage ? 1 : 0.9, opacity: isPage ? 1 : 0 }}
+        className={isPage ? 'bg-white/10 dark:bg-gray-800/60 rounded-2xl border border-white/10' : 'bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden'}
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6">
@@ -150,12 +150,14 @@ const WeatherNews = ({ onClose, cityName, countryName }) => {
                 Latest weather updates for {cityName}, {countryName}
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-white/80 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
+            {!isPage && (
+              <button
+                onClick={onClose}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -186,7 +188,7 @@ const WeatherNews = ({ onClose, cityName, countryName }) => {
         </div>
 
         {/* Content */}
-        <div className="p-6 max-h-[60vh] overflow-y-auto">
+        <div className={isPage ? 'p-6' : 'p-6 max-h-[60vh] overflow-y-auto'}>
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>

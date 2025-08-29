@@ -2,10 +2,17 @@
 
 // Map weather conditions to background gradients
 export const getWeatherBackground = (weatherMain, isDark = false) => {
-  const condition = weatherMain?.toLowerCase();
+  const text = weatherMain?.toLowerCase() || '';
+  const has = (keyword) => text.includes(keyword);
   
   if (isDark) {
-    switch (condition) {
+    // Substring-aware detection for WeatherAPI text like "Light rain shower"
+    if (has('clear')) return 'bg-clear-night-gradient';
+    if (has('cloud')) return 'bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900';
+    if (has('rain') || has('drizzle') || has('shower') || has('thunder')) return 'bg-gradient-to-br from-gray-700 via-slate-800 to-gray-900';
+    if (has('snow') || has('sleet') || has('blizzard')) return 'bg-gradient-to-br from-slate-600 via-gray-700 to-slate-800';
+    if (has('mist') || has('fog') || has('haze')) return 'bg-gradient-to-br from-gray-700 via-slate-700 to-gray-800';
+    switch (text) {
       case 'clear':
         return 'bg-clear-night-gradient';
       case 'clouds':
@@ -26,8 +33,13 @@ export const getWeatherBackground = (weatherMain, isDark = false) => {
     }
   }
   
-  // Light mode backgrounds
-  switch (condition) {
+  // Light mode backgrounds (substring-aware first)
+  if (has('clear')) return 'bg-sunny-gradient';
+  if (has('cloud')) return 'bg-cloudy-gradient';
+  if (has('rain') || has('drizzle') || has('shower') || has('thunder')) return 'bg-rainy-gradient';
+  if (has('snow') || has('sleet') || has('blizzard')) return 'bg-snowy-gradient';
+  if (has('mist') || has('fog') || has('haze')) return 'bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500';
+  switch (text) {
     case 'clear':
       return 'bg-sunny-gradient';
     case 'clouds':
@@ -50,7 +62,8 @@ export const getWeatherBackground = (weatherMain, isDark = false) => {
 
 // Map weather conditions to icons
 export const getWeatherIcon = (weatherMain, weatherIcon) => {
-  const condition = weatherMain?.toLowerCase();
+  const text = weatherMain?.toLowerCase() || '';
+  const has = (keyword) => text.includes(keyword);
   const iconCode = weatherIcon;
   
   // Use OpenWeatherMap icon codes for more accurate representation
@@ -79,8 +92,27 @@ export const getWeatherIcon = (weatherMain, weatherIcon) => {
     return iconMap[iconCode];
   }
   
-  // Fallback to condition-based icons
-  switch (condition) {
+  // Smart substring detection for WeatherAPI text like "Light Rain Shower"
+  if (has('rain') || has('drizzle') || has('shower')) {
+    if (has('light') || has('drizzle')) return '🌦️'; // Light rain/drizzle
+    if (has('heavy') || has('intense')) return '🌧️'; // Heavy rain
+    if (has('thunder') || has('storm')) return '⛈️'; // Thunderstorm
+    return '🌧️'; // Default rain
+  }
+  
+  if (has('snow') || has('sleet') || has('blizzard')) {
+    if (has('light')) return '🌨️'; // Light snow
+    if (has('heavy') || has('intense')) return '❄️'; // Heavy snow
+    return '❄️'; // Default snow
+  }
+  
+  if (has('thunder') || has('storm')) return '⛈️';
+  if (has('clear') || has('sunny')) return '☀️';
+  if (has('cloud') || has('overcast')) return '☁️';
+  if (has('mist') || has('fog') || has('haze')) return '🌫️';
+  
+  // Fallback to exact condition matching
+  switch (text) {
     case 'clear':
       return '☀️';
     case 'clouds':

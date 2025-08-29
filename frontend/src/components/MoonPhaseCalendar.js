@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Moon, Star, Sun } from 'lucide-react';
 
-const MoonPhaseCalendar = ({ onClose, forecastData }) => {
+const MoonPhaseCalendar = ({ onClose, forecastData, isPage = false }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [moonPhases, setMoonPhases] = useState([]);
 
@@ -13,9 +13,13 @@ const MoonPhaseCalendar = ({ onClose, forecastData }) => {
         .map(day => ({
           date: new Date(day.date),
           phase: day.astronomy.moon_phase,
-          illumination: typeof day.astronomy.moon_illumination === 'number' 
-            ? day.astronomy.moon_illumination 
-            : 0,
+          illumination: (() => {
+            const raw = Number(day.astronomy.moon_illumination);
+            if (Number.isFinite(raw)) {
+              return raw > 1 ? raw / 100 : raw; // normalize to 0..1
+            }
+            return 0;
+          })(),
           sunrise: day.astronomy.sunrise,
           sunset: day.astronomy.sunset,
           moonrise: day.astronomy.moonrise,
@@ -93,21 +97,23 @@ const MoonPhaseCalendar = ({ onClose, forecastData }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
+      initial={{ opacity: 0, scale: isPage ? 1 : 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="weather-card p-6 max-w-4xl mx-auto max-h-[90vh] overflow-y-auto"
+      className={isPage ? 'weather-card p-6' : 'weather-card p-6 max-w-4xl mx-auto max-h-[90vh] overflow-y-auto'}
     >
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-2xl font-bold text-white flex items-center gap-2">
           <Moon className="text-blue-300" size={28} />
           Moon Phase Calendar
         </h3>
-        <button
-          onClick={onClose}
-          className="p-2 text-white/60 hover:text-white transition"
-        >
-          ✕
-        </button>
+        {!isPage && (
+          <button
+            onClick={onClose}
+            className="p-2 text-white/60 hover:text-white transition"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {/* Month Navigation */}
@@ -137,14 +143,18 @@ const MoonPhaseCalendar = ({ onClose, forecastData }) => {
           <p className="text-sm">Please search for a city first to get moon phase information</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6 max-h-96 overflow-y-auto">
+        <div className={
+          isPage
+            ? 'grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] auto-rows-fr gap-4 mb-6'
+            : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6 max-h-96 overflow-y-auto'
+        }>
           {moonPhases.map((phase, index) => (
           <motion.div
             key={phase.date.toISOString()}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="glass-effect rounded-xl p-4 min-h-[200px] flex flex-col"
+            className="glass-effect rounded-xl p-4 min-h-[200px] h-full flex flex-col"
           >
             <div className="text-center mb-3">
               <div className="text-4xl mb-2">
@@ -165,13 +175,13 @@ const MoonPhaseCalendar = ({ onClose, forecastData }) => {
               <div className="flex justify-between">
                 <span className="text-white/60">Illumination:</span>
                 <span className="text-white font-medium">
-                  {typeof phase.illumination === 'number' ? Math.round(phase.illumination * 100) : 0}%
+                  {Number.isFinite(phase.illumination) ? Math.round((phase.illumination > 1 ? phase.illumination / 100 : phase.illumination) * 100) : 0}%
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-white/60">Stargazing:</span>
-                <span className={`font-medium ${getVisibilityRating(phase.illumination || 0).color}`}>
-                  {getVisibilityRating(phase.illumination || 0).rating}
+                <span className={`font-medium ${getVisibilityRating((phase.illumination > 1 ? phase.illumination / 100 : phase.illumination) || 0).color}`}>
+                  {getVisibilityRating((phase.illumination > 1 ? phase.illumination / 100 : phase.illumination) || 0).rating}
                 </span>
               </div>
             </div>

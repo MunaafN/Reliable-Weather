@@ -366,3 +366,72 @@ router.get('/search', checkApiKey, async (req, res) => {
 });
 
 module.exports = router;
+ 
+// Server-Sent Events for real-time weather alerts
+router.get('/alerts/stream', checkApiKey, async (req, res) => {
+  try {
+    const { city, lat, lon, units = 'metric' } = req.query;
+    if (!city && (!lat || !lon)) {
+      return res.status(400).json({
+        error: 'Missing required parameters',
+        message: 'Please provide either city or coordinates (lat, lon)'
+      });
+    }
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders && res.flushHeaders();
+
+    const query = city ? city.trim() : `${lat},${lon}`;
+
+    const sendEvent = (data) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    // Initial event to confirm connection
+    sendEvent({ type: 'connected', timestamp: new Date().toISOString() });
+
+    let lastAlertSignature = '';
+
+    const poll = async () => {
+      try {
+        const data = await fetchWeatherData('/forecast.json', {
+          q: query,
+          days: 1,
+          aqi: 'no',
+          alerts: 'yes'
+        });
+        const alerts = data.alerts?.alert || [];
+        // Create a simple signature to avoid re-sending identical payloads
+        const signature = alerts.map(a => `${a.event}-${a.effective}-${a.expires}`).join('|');
+        if (signature !== lastAlertSignature) {
+          lastAlertSignature = signature;
+          sendEvent({ type: 'alerts', alerts, location: data.location?.name, timestamp: new Date().toISOString() });
+        }
+      } catch (err) {
+        sendEvent({ type: 'error', message: err.message || 'Polling error' });
+      }
+    };
+
+    // Poll every 60 seconds (WeatherAPI rate limits apply)
+    const intervalId = setInterval(poll, 60 * 1000);
+    // Do first poll immediately
+    poll();
+
+    // Keep-alive heartbeat every 25 seconds
+    const heartbeatId = setInterval(() => {
+      res.write(': heartbeat\n\n');
+    }, 25 * 1000);
+
+    req.on('close', () => {
+      clearInterval(intervalId);
+      clearInterval(heartbeatId);
+      res.end();
+    });
+  } catch (e) {
+    console.error('SSE setup error:', e);
+    res.status(500).json({ error: 'Failed to establish alerts stream' });
+  }
+});

@@ -30,27 +30,8 @@ const WeatherCard = ({ data }) => {
   const isDay = data?.localTime?.isDayTime !== undefined ? data.localTime.isDayTime : true;
   const greeting = getTimeGreeting();
   const weatherIcon = getWeatherIcon(data.weather.main, data.weather.icon);
-  const displayIcon = !isDay ? (() => {
-    const condition = (data.weather.main || '').toLowerCase();
-    switch (condition) {
-      case 'clear':
-        return '🌙';
-      case 'clouds':
-      case 'mist':
-      case 'fog':
-      case 'haze':
-        return '☁️';
-      case 'rain':
-      case 'drizzle':
-        return '🌧️';
-      case 'thunderstorm':
-        return '⛈️';
-      case 'snow':
-        return '❄️';
-      default:
-        return '🌙';
-    }
-  })() : weatherIcon;
+  // For night time, we can still use getWeatherIcon but ensure night-appropriate icons
+  const displayIcon = weatherIcon;
   const tempUnit = data?.units === 'imperial' ? 'F' : 'C';
   const windUnit = data?.units === 'imperial' ? 'mph' : 'm/s';
   const visibilityUnit = data?.units === 'imperial' ? 'miles' : 'km';

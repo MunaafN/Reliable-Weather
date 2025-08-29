@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Routes, Route } from 'react-router-dom';
 import SearchBar from './components/SearchBar';
 import WeatherCard from './components/WeatherCard';
 import ForecastCard from './components/ForecastCard';
@@ -10,12 +11,13 @@ import LocationButton from './components/LocationButton';
 import { getWeatherBackground } from './utils/weatherUtils';
 import { weatherApi } from './services/weatherApi';
 import HourlyTimeline from './components/HourlyTimeline';
-import WeatherComparison from './components/WeatherComparison';
 import WeatherAlerts from './components/WeatherAlerts';
-import MoonPhaseCalendar from './components/MoonPhaseCalendar';
-import WeatherSharing from './components/WeatherSharing';
-import WeatherReminders from './components/WeatherReminders';
-import WeatherNews from './components/WeatherNews';
+import Sidebar from './components/Sidebar';
+import ComparePage from './pages/ComparePage';
+import MoonPage from './pages/MoonPage';
+import NewsPage from './pages/NewsPage';
+import SharePage from './pages/SharePage';
+import RemindersPage from './pages/RemindersPage';
 
 function App() {
   const [weatherData, setWeatherData] = useState(null);
@@ -27,12 +29,7 @@ function App() {
   const [searchHistory, setSearchHistory] = useState([]);
   const [units, setUnits] = useState(localStorage.getItem('weatherUnits') || 'metric');
   const [lastQuery, setLastQuery] = useState(null);
-  const [showComparison, setShowComparison] = useState(false);
   const [showAlerts, setShowAlerts] = useState(true);
-  const [showMoonPhase, setShowMoonPhase] = useState(false);
-  const [showSharing, setShowSharing] = useState(false);
-  const [showReminders, setShowReminders] = useState(false);
-  const [showNews, setShowNews] = useState(false);
 
   // Initialize dark mode and auto theme from localStorage
   useEffect(() => {
@@ -110,13 +107,21 @@ function App() {
     refetchForUnits();
   }, [units, lastQuery]);
 
-  // Auto-refresh weather data every 15 minutes
+  // Auto-refresh weather data every 5 minutes with smart checks
   useEffect(() => {
     if (!lastQuery) return;
     
+    let lastSignature = '';
+    const getSignature = (current, forecast) => {
+      if (!current || !forecast) return '';
+      const cur = [current.temperature?.current, current.weather?.code, current.wind?.speed, current.humidity].join('-');
+      const f0 = forecast.forecast?.[0];
+      const fSig = f0 ? [f0.temperature?.min, f0.temperature?.max, f0.rain_chance].join('-') : '';
+      return `${cur}|${fSig}`;
+    };
+
     const interval = setInterval(async () => {
-      if (document.hidden) return; // Don't refresh when tab is hidden
-      
+      if (document.hidden || !navigator.onLine) return; // Only refresh when visible and online
       try {
         let currentData, forecast;
         if (typeof lastQuery === 'object' && lastQuery.lat && lastQuery.lon) {
@@ -130,17 +135,49 @@ function App() {
             weatherApi.getForecast(lastQuery, units)
           ]);
         }
-        if (currentData && forecast) {
+        const sig = getSignature(currentData, forecast);
+        if (sig && sig !== lastSignature) {
+          lastSignature = sig;
           setWeatherData(currentData);
           setForecastData(forecast);
         }
       } catch (err) {
         console.log('Auto-refresh failed:', err.message);
       }
-    }, 15 * 60 * 1000); // 15 minutes
+    }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);
   }, [lastQuery, units]);
+
+  // SSE: Subscribe to backend alerts stream and Push Notifications
+  useEffect(() => {
+    if (!lastQuery) return;
+    const url = new URL('/api/weather/alerts/stream', window.location.origin.replace(/\/$/, ''));
+    if (typeof lastQuery === 'object') {
+      url.searchParams.set('lat', lastQuery.lat);
+      url.searchParams.set('lon', lastQuery.lon);
+    } else {
+      url.searchParams.set('city', lastQuery);
+    }
+    const es = new EventSource(url.toString());
+    es.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        if (data.type === 'alerts' && Array.isArray(data.alerts)) {
+          setForecastData(prev => ({ ...(prev || {}), alerts: data.alerts }));
+          // Push a notification for severe alerts
+          if (Notification.permission === 'granted' && data.alerts.length > 0) {
+            const top = data.alerts[0];
+            new Notification(`Weather Alert: ${top.event}`, { body: top.headline || top.desc || 'Severe weather alert', tag: 'weather-alert' });
+          }
+        }
+      } catch {}
+    };
+    es.onerror = () => {
+      es.close();
+    };
+    return () => es.close();
+  }, [lastQuery]);
 
   const handleSearch = async (searchInput) => {
     // Handle both city names and coordinate objects
@@ -221,16 +258,20 @@ function App() {
     (isDarkEffective ? 'bg-default-dark-gradient' : 'bg-default-gradient');
 
   return (
-    <div className={`min-h-screen transition-all duration-700 ${backgroundClass}`}>
+    <div className={`min-h-screen transition-all duration-700 overflow-x-hidden ${backgroundClass}`} onMouseMove={() => {
+      if (Notification && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+    }}>
       {/* Background patterns for weather effects */}
-      {weatherData?.weather.main === 'Rain' && (
+      {(weatherData?.weather?.main?.toLowerCase?.().includes('rain') || weatherData?.weather?.main?.toLowerCase?.().includes('drizzle') || weatherData?.weather?.main?.toLowerCase?.().includes('shower')) && (
         <div className="fixed inset-0 rain-pattern pointer-events-none" />
       )}
-      {weatherData?.weather.main === 'Snow' && (
+      {(weatherData?.weather?.main?.toLowerCase?.().includes('snow') || weatherData?.weather?.main?.toLowerCase?.().includes('sleet') || weatherData?.weather?.main?.toLowerCase?.().includes('blizzard')) && (
         <div className="fixed inset-0 snow-pattern pointer-events-none" />
       )}
       
-      <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl">
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
         {/* Header */}
                  <motion.header 
            initial={{ opacity: 0, y: -20 }}
@@ -256,71 +297,7 @@ function App() {
                  {units === 'metric' ? '°C, m/s' : '°F, mph'}
                </button>
              </div>
-             
-             {/* Feature Buttons */}
-             <button
-               onClick={() => setShowComparison(true)}
-               className="px-2 py-1 lg:px-3 lg:py-2 rounded-lg lg:rounded-xl bg-blue-500/80 text-white text-xs lg:text-sm hover:bg-blue-500 transition"
-             >
-               Compare
-             </button>
-             <button
-               onClick={() => setShowMoonPhase(true)}
-               className="px-2 py-1 lg:px-3 lg:py-2 rounded-lg lg:rounded-xl bg-purple-500/80 text-white text-xs lg:text-sm hover:bg-purple-500 transition"
-             >
-               🌙 Moon
-             </button>
-             <button
-               onClick={() => {
-                 if (!weatherData) {
-                   alert('Please search for a city first to get weather news');
-                   return;
-                 }
-                 setShowNews(true);
-               }}
-               disabled={!weatherData}
-               className={`px-2 py-1 lg:px-3 lg:py-2 rounded-lg lg:rounded-xl text-white text-xs lg:text-sm transition ${
-                 weatherData 
-                   ? 'bg-indigo-500/80 hover:bg-indigo-500' 
-                   : 'bg-gray-500/50 cursor-not-allowed'
-               }`}
-             >
-               📰 News
-             </button>
-             <button
-               onClick={() => {
-                 if (!weatherData) {
-                   alert('Please search for a city first to share weather data');
-                   return;
-                 }
-                 setShowSharing(true);
-               }}
-               disabled={!weatherData}
-               className={`px-2 py-1 lg:px-3 lg:py-2 rounded-lg lg:rounded-xl text-white text-xs lg:text-sm transition ${
-                 weatherData 
-                   ? 'bg-green-500/80 hover:bg-green-500' 
-                   : 'bg-gray-500/50 cursor-not-allowed'
-               }`}
-             >
-               📤 Share
-             </button>
-             <button
-               onClick={() => {
-                 if (!weatherData) {
-                   alert('Please search for a city first to get weather reminders');
-                   return;
-                 }
-                 setShowReminders(true);
-               }}
-               disabled={!weatherData}
-               className={`px-2 py-1 lg:px-3 lg:py-2 rounded-lg lg:rounded-xl text-white text-xs lg:text-sm transition ${
-                 weatherData 
-                   ? 'bg-orange-500/80 hover:bg-orange-500' 
-                   : 'bg-gray-500/50 cursor-not-allowed'
-               }`}
-             >
-               🔔 Remind
-             </button>
+             {/* Feature buttons moved to sidebar pages */}
              <button
                onClick={() => setShowAlerts(prev => !prev)}
                disabled={!weatherData}
@@ -399,125 +376,109 @@ function App() {
           </div>
         </motion.div>
 
-        {/* Weather Alerts */}
-        {showAlerts && weatherData && (
-          <WeatherAlerts 
-            alerts={forecastData?.alerts} 
-            onDismiss={() => setShowAlerts(false)} 
-            showNoAlerts={true}
-          />
-        )}
+        {/* Weather Alerts + Routed Content */}
+        <div className="grid grid-cols-1 md:grid-cols-[18rem,1fr] gap-6 items-start">
+          <Sidebar />
+          <div className="min-w-0">
+            {showAlerts && weatherData && (
+              <WeatherAlerts 
+                alerts={forecastData?.alerts} 
+                onDismiss={() => setShowAlerts(false)} 
+                showNoAlerts={true}
+              />
+            )}
 
-        {/* Loading State */}
-        <AnimatePresence>
-          {loading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex justify-center mb-8"
-            >
-              <LoadingSpinner />
-            </motion.div>
-          )}
-        </AnimatePresence>
+            <AnimatePresence>
+              {loading && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex justify-center mb-8"
+                >
+                  <LoadingSpinner />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-        {/* Error Message */}
-        <AnimatePresence>
-          {error && !loading && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="mb-8"
-            >
-              <ErrorMessage message={error} onDismiss={() => setError(null)} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Weather Data */}
-        <AnimatePresence mode="wait">
-          {weatherData && !loading && (
-            <motion.div
-              key="weather-content"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.5 }}
-            >
-              {/* Current Weather */}
-              <motion.div 
-                className="mb-8"
-                layout
-              >
-                <WeatherCard data={weatherData} />
-              </motion.div>
-
-              {/* 5-Day Forecast */}
-              {forecastData && (
+            <AnimatePresence>
+              {error && !loading && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="mb-8"
                 >
-                  <ForecastCard data={forecastData} />
+                  <ErrorMessage message={error} onDismiss={() => setError(null)} />
                 </motion.div>
               )}
+            </AnimatePresence>
 
-              {/* Hourly Timeline */}
-              {forecastData && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25 }}
-                  className="mt-6"
-                >
-                  <HourlyTimeline data={forecastData} units={units} />
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            <Routes>
+              <Route path="/" element={
+                <>
+                  <AnimatePresence mode="wait">
+                    {weatherData && !loading && (
+                      <motion.div
+                        key="weather-content"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.5 }}
+                      >
+                        <motion.div className="mb-8" layout>
+                          <WeatherCard data={weatherData} />
+                        </motion.div>
+                        {forecastData && (
+                          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                            <ForecastCard data={forecastData} />
+                          </motion.div>
+                        )}
+                        {forecastData && (
+                          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="mt-6">
+                            <HourlyTimeline data={forecastData} units={units} />
+                          </motion.div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-        {/* Welcome Message */}
-        {!weatherData && !loading && !error && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="text-center"
-          >
-            <div className="weather-card max-w-md mx-auto p-8">
-              <motion.div
-                animate={{ 
-                  rotate: [0, 10, -10, 0],
-                  scale: [1, 1.1, 1]
-                }}
-                transition={{ 
-                  duration: 2,
-                  repeat: Infinity,
-                  repeatDelay: 3
-                }}
-                className="text-6xl mb-4"
-              >
-                🌈
-              </motion.div>
-                             <h2 className="text-2xl font-bold text-white mb-4">
-                 Welcome to Reliable Weather.com
-               </h2>
-               <p className="text-white/80 mb-6">
-                 Search for any city to get real-time weather information and 7-day forecasts.
-               </p>
-              <div className="space-y-2 text-sm text-white/70">
-                <p>✨ Real-time weather data</p>
-                <p>📅 7-day forecast</p>
-                <p>📍 Location-based weather</p>
-                <p>🌙 Dark mode support</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
+                  {!weatherData && !loading && !error && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="text-center"
+                    >
+                      <div className="weather-card max-w-md mx-auto p-8">
+                        <motion.div
+                          animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                          className="text-6xl mb-4"
+                        >
+                          🌈
+                        </motion.div>
+                        <h2 className="text-2xl font-bold text-white mb-4">Welcome to Reliable Weather.com</h2>
+                        <p className="text-white/80 mb-6">Search for any city to get real-time weather information and 7-day forecasts.</p>
+                        <div className="space-y-2 text-sm text-white/70">
+                          <p>✨ Real-time weather data</p>
+                          <p>📅 7-day forecast</p>
+                          <p>📍 Location-based weather</p>
+                          <p>🌙 Dark mode support</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </>
+              } />
+              <Route path="/compare" element={<ComparePage />} />
+              <Route path="/moon" element={<MoonPage forecastData={forecastData} />} />
+              <Route path="/news" element={<NewsPage cityName={weatherData?.city} countryName={weatherData?.country} />} />
+              <Route path="/share" element={<SharePage weatherData={weatherData} forecastData={forecastData} />} />
+              <Route path="/reminders" element={<RemindersPage weatherData={weatherData} forecastData={forecastData} />} />
+            </Routes>
+          </div>
+        </div>
 
         {/* Footer */}
         <motion.footer 
@@ -527,101 +488,13 @@ function App() {
           className="text-center mt-16 text-white/60 text-sm"
         >
           <p>Weather data provided by WeatherAPI.com</p>
-                     <p className="mt-2">Reliable Weather - Built with React, Tailwind CSS, and Framer Motion</p>
+          <p className="mt-2">Reliable Weather - Built with React, Tailwind CSS, and Framer Motion</p>
         </motion.footer>
       </div>
 
-      {/* Weather Comparison Modal */}
-      <AnimatePresence>
-        {showComparison && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowComparison(false);
-            }}
-          >
-            <WeatherComparison onClose={() => setShowComparison(false)} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Moon Phase Calendar Modal */}
-      <AnimatePresence>
-        {showMoonPhase && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowMoonPhase(false);
-            }}
-          >
-            <MoonPhaseCalendar 
-              onClose={() => setShowMoonPhase(false)} 
-              forecastData={forecastData}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Weather Sharing Modal */}
-      <AnimatePresence>
-        {showSharing && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowSharing(false);
-            }}
-          >
-            <WeatherSharing 
-              onClose={() => setShowSharing(false)} 
-              weatherData={weatherData}
-              forecastData={forecastData}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-             {/* Weather Reminders Modal */}
-       <AnimatePresence>
-         {showReminders && (
-           <motion.div
-             initial={{ opacity: 0 }}
-             animate={{ opacity: 1 }}
-             exit={{ opacity: 0 }}
-             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-             onClick={(e) => {
-               if (e.target === e.currentTarget) setShowReminders(false);
-             }}
-           >
-             <WeatherReminders 
-               onClose={() => setShowReminders(false)} 
-               weatherData={weatherData}
-               forecastData={forecastData}
-             />
-           </motion.div>
-         )}
-       </AnimatePresence>
-
-       {/* Weather News Modal */}
-       <AnimatePresence>
-         {showNews && (
-           <WeatherNews 
-             onClose={() => setShowNews(false)} 
-             cityName={weatherData?.city}
-             countryName={weatherData?.country}
-           />
-         )}
-       </AnimatePresence>
-     </div>
-   );
- }
+      {/* Feature modals removed (replaced by sidebar pages) */}
+    </div>
+  );
+}
 
 export default App;
