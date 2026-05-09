@@ -432,6 +432,73 @@ router.get('/alerts/stream', checkApiKey, async (req, res) => {
     });
   } catch (e) {
     console.error('SSE setup error:', e);
-    res.status(500).json({ error: 'Failed to establish alerts stream' });
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to establish alerts stream' });
   }
 });
+
+// ─── #8: Historical Weather Endpoint ─────────────────────────────────────────
+router.get('/history', async (req, res) => {
+  try {
+    const { city, lat, lon, date } = req.query;
+    if (!date) return res.status(400).json({ error: 'Date is required (YYYY-MM-DD)' });
+    if (!city && (!lat || !lon)) return res.status(400).json({ error: 'Provide city or lat+lon' });
+
+    let finalQuery;
+    let cacheKeyStr;
+    
+    if (lat && lon) {
+      const valid = validateCoordinates(lat, lon);
+      if (!valid) return res.status(400).json({ error: 'Invalid coordinates' });
+      finalQuery = `${valid.lat},${valid.lon}`;
+      cacheKeyStr = `hist_${finalQuery}_${date}`;
+    } else {
+      const aliases = Object.keys(CITY_ALIASES).map(k => k.toLowerCase());
+      const queryLower = city.toLowerCase();
+      finalQuery = aliases.includes(queryLower) ? CITY_ALIASES[queryLower] : city;
+      cacheKeyStr = `hist_${finalQuery.toLowerCase().replace(/\s+/g, '')}_${date}`;
+    }
+
+    const cachedData = cache.get(cacheKeyStr);
+    if (cachedData) return res.json(cachedData);
+
+    const data = await fetchWeatherData('/history.json', { q: finalQuery, dt: date });
+    
+    if (!data.forecast || !data.forecast.forecastday || data.forecast.forecastday.length === 0) {
+       return res.status(404).json({ error: 'Historical data not available' });
+    }
+
+    const historyDay = data.forecast.forecastday[0];
+    const responseData = {
+      city: data.location.name,
+      country: data.location.country,
+      date: historyDay.date,
+      summary: {
+        maxTemp: historyDay.day.maxtemp_c,
+        minTemp: historyDay.day.mintemp_c,
+        avgTemp: historyDay.day.avgtemp_c,
+        maxWind: historyDay.day.maxwind_kph,
+        totalPrecip: historyDay.day.totalprecip_mm,
+        avgVis: historyDay.day.avgvis_km,
+        humidity: historyDay.day.avghumidity,
+        condition: historyDay.day.condition.text,
+        icon: historyDay.day.condition.icon,
+      },
+      hourly: historyDay.hour.map(h => ({
+        time: h.time,
+        temp: h.temp_c,
+        condition: h.condition.text,
+        icon: h.condition.icon,
+        wind: h.wind_kph,
+        precip: h.precip_mm
+      }))
+    };
+
+    cache.set(cacheKeyStr, responseData, 86400 * 7); // 7 days cache
+    res.json(responseData);
+  } catch (error) {
+    if (error.message.includes('City not found')) res.status(404).json({ error: error.message });
+    else res.status(500).json({ error: 'Failed to fetch historical data' });
+  }
+});
+
+module.exports = router;

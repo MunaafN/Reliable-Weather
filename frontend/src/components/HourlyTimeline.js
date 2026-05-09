@@ -1,53 +1,55 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { BarChart3, List } from 'lucide-react';
 import { getWeatherIcon, formatDate } from '../utils/weatherUtils';
+import HourlyChart from './HourlyChart';
 
 const HourlyTimeline = ({ data, units = 'metric' }) => {
-  if (!data || !data.forecast || data.forecast.length === 0) return null;
-
-  // Use first day if current day present
-  const today = data.forecast[0];
-  const hours = today.hourlyData || [];
-
-  if (!hours || hours.length === 0) return null;
-
+  const [view, setView] = useState('chart'); // 'chart' | 'cards'
+  
+  if (!data?.forecast?.length) return null;
+  const hours = data.forecast[0]?.hourlyData || [];
+  if (!hours.length) return null;
   const tempUnit = units === 'imperial' ? 'F' : 'C';
-  const windUnit = units === 'imperial' ? 'mph' : 'm/s';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="weather-card p-4 md:p-6 text-white overflow-hidden"
-    >
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="weather-card p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-sm text-white/80">Hourly</div>
-          <div className="text-lg font-semibold">{formatDate(today.date)}</div>
+          <h3 className="text-sm font-semibold text-[var(--text-main)]">Hourly Forecast</h3>
+          <p className="text-xs text-[var(--text-muted)]">{formatDate(data.forecast[0].date)}</p>
         </div>
-        <div className="text-sm text-white/60">{data.city}, {data.country}</div>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setView('chart')} className={`p-1.5 rounded-lg transition-colors ${view === 'chart' ? 'bg-[var(--element-bg)] text-[var(--text-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}>
+            <BarChart3 size={14} />
+          </button>
+          <button onClick={() => setView('cards')} className={`p-1.5 rounded-lg transition-colors ${view === 'cards' ? 'bg-[var(--element-bg)] text-[var(--text-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}>
+            <List size={14} />
+          </button>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="flex gap-3 min-w-max">
-          {hours.map((h) => {
-            const timeLabel = new Date(h.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-            return (
-              <div key={h.timeEpoch} className="glass-effect rounded-2xl p-3 w-28 text-center shrink-0">
-                <div className="text-xs text-white/60 mb-1">{timeLabel}</div>
-                <div className="text-2xl mb-1">{getWeatherIcon(h.condition, null)}</div>
-                <div className="font-semibold">{Math.round(h.temp)}°{tempUnit}</div>
-                <div className="text-xs text-white/70 mt-1">💨 {h.windSpeed} {windUnit}</div>
-                <div className="text-xs text-white/50">🌧️ {h.rainChance || 0}%</div>
-              </div>
-            );
-          })}
+      {view === 'chart' ? (
+        <HourlyChart hours={hours} units={units} />
+      ) : (
+        <div className="overflow-x-auto -mx-2 px-2">
+          <div className="flex gap-2 min-w-max pb-1">
+            {hours.map((h) => {
+              const t = new Date(h.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+              return (
+                <motion.div key={h.timeEpoch} whileHover={{ scale: 1.04 }} className="glass-effect p-3 w-[72px] text-center shrink-0 cursor-default">
+                  <p className="text-[10px] text-[var(--text-muted)] mb-1">{t}</p>
+                  <p className="text-lg mb-0.5">{getWeatherIcon(h.condition, null)}</p>
+                  <p className="text-xs font-semibold text-[var(--text-main)]">{Math.round(h.temp)}°{tempUnit}</p>
+                  <p className="text-[10px] text-brand-blue mt-1 opacity-80">🌧 {h.rainChance || 0}%</p>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </motion.div>
   );
 };
 
 export default HourlyTimeline;
-
-

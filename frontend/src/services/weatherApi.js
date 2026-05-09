@@ -47,8 +47,12 @@ apiClient.interceptors.response.use(
     switch (status) {
       case 400:
         throw new Error(data.message || 'Invalid request. Please check your input.');
-      case 404:
-        throw new Error(data.message || 'City not found. Please check the spelling.');
+      case 404: {
+        // Surface "did you mean" suggestions from backend
+        const err404 = new Error(data.message || 'City not found. Please check the spelling.');
+        err404.suggestions = data.suggestions || [];
+        throw err404;
+      }
       case 429:
         throw new Error('Too many requests. Please try again later.');
       case 500:
@@ -137,11 +141,50 @@ export const weatherApi = {
   // Health check
   healthCheck: async () => {
     try {
-      const response = await apiClient.get('/health');
+      // Health endpoint is at server root, not under /api
+      const baseUrl = API_BASE_URL.replace(/\/api\/?$/, '');
+      const response = await axios.get(`${baseUrl}/health`, { timeout: 5000 });
       return response.data;
     } catch (error) {
       console.error('Health check failed:', error);
       throw new Error('Weather service is currently unavailable');
+    }
+  },
+
+  // Batch weather for multiple cities (#15)
+  batchWeather: async (cities, units = 'metric') => {
+    try {
+      const response = await apiClient.get('/weather/batch', {
+        params: { cities: cities.join(','), units }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Batch weather error:', error);
+      throw error;
+    }
+  },
+
+  // Cache stats
+  getStats: async () => {
+    try {
+      const response = await apiClient.get('/weather/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Stats error:', error);
+      throw error;
+    }
+  },
+
+  // Historical Weather
+  getHistory: async (city, date, units = 'metric') => {
+    try {
+      const response = await apiClient.get('/weather/history', {
+        params: { city, date, units }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Historical weather error:', error);
+      throw error;
     }
   }
 };
@@ -154,42 +197,56 @@ export const getCurrentLocation = () => {
       return;
     }
 
-    const options = {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 300000 // 5 minutes cache
+    // Try high-accuracy first (uses GPS on mobile), fall back to any accuracy
+    const tryGetPosition = (highAccuracy) => {
+      return new Promise((res, rej) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => res(position),
+          (error) => rej(error),
+          {
+            enableHighAccuracy: highAccuracy,
+            timeout: highAccuracy ? 8000 : 15000,
+            maximumAge: 0, // always get fresh position
+          }
+        );
+      });
     };
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
+    // Attempt 1: high accuracy (GPS). Attempt 2: any accuracy (IP/wifi)
+    tryGetPosition(true)
+      .catch(() => tryGetPosition(false))
+      .then((position) => {
+        const result = {
           lat: position.coords.latitude,
           lon: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        });
-      },
-      (error) => {
+          accuracy: position.coords.accuracy, // meters
+        };
+
+        // Warn if accuracy is very poor (> 5km means IP-based location)
+        if (position.coords.accuracy > 5000) {
+          console.warn(`⚠️ GPS accuracy is low: ${Math.round(position.coords.accuracy)}m — location may be approximate`);
+        }
+
+        resolve(result);
+      })
+      .catch((error) => {
         let message = 'Failed to get your location';
-        
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            message = 'Location access denied by user';
+            message = 'Location access denied. Please allow location access in your browser settings.';
             break;
           case error.POSITION_UNAVAILABLE:
             message = 'Location information is unavailable';
             break;
           case error.TIMEOUT:
-            message = 'Location request timed out';
+            message = 'Location request timed out. Try again or search manually.';
             break;
           default:
             message = 'An unknown error occurred while getting location';
             break;
         }
-        
         reject(new Error(message));
-      },
-      options
-    );
+      });
   });
 };
 

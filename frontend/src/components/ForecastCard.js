@@ -1,213 +1,74 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, TrendingUp, TrendingDown } from 'lucide-react';
-import { 
-  getWeatherIcon, 
-  formatTemperature, 
-  formatDate,
-  getWindDirection 
-} from '../utils/weatherUtils';
+import { CalendarDays, Droplets } from 'lucide-react';
+import { getWeatherIcon, formatTemperature, formatDate } from '../utils/weatherUtils';
 
 const ForecastCard = ({ data }) => {
-  if (!data || !data.forecast) return null;
-
+  if (!data?.forecast) return null;
   const tempUnit = data?.units === 'imperial' ? 'F' : 'C';
-
-  const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      transition: {
-        duration: 0.6,
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 10 },
-    visible: { opacity: 1, y: 0 }
-  };
+  const windUnit = data?.units === 'imperial' ? 'mph' : 'm/s';
 
   return (
-    <motion.div
-      variants={cardVariants}
-      initial="hidden"
-      animate="visible"
-      className="weather-card p-6 md:p-8 text-white"
-    >
-      {/* Header */}
-      <motion.div variants={itemVariants} className="flex items-center mb-6">
-        <Calendar className="w-6 h-6 mr-3 text-white/80" />
-        <div>
-          <h3 className="text-xl md:text-2xl font-bold">7-Day Forecast</h3>
-          <p className="text-white/80">
-            {data.city}, {data.country}
-          </p>
-        </div>
-      </motion.div>
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="weather-card p-5">
+      <div className="flex items-center gap-2 mb-5">
+        <CalendarDays size={16} className="text-slate-400" />
+        <h3 className="text-sm font-semibold text-white">7-Day Forecast</h3>
+        <span className="text-xs text-slate-500 ml-auto">{data.city}</span>
+      </div>
 
-      {/* Forecast Items */}
-      <div className="space-y-4">
-        {data.forecast.map((day, index) => (
+      <div className="space-y-1">
+        {data.forecast.map((day, i) => (
           <motion.div
             key={day.date}
-            variants={itemVariants}
-            className="glass-effect rounded-xl p-4 hover:bg-white/10 transition-all duration-300"
-            whileHover={{ 
-              scale: 1.02,
-              backgroundColor: 'rgba(255, 255, 255, 0.1)'
-            }}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.04 }}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.03] transition-colors group"
           >
-            <div className="flex items-center justify-between">
-              {/* Date and Weather Icon */}
-              <div className="flex items-center space-x-4">
-                <div className="text-sm md:text-base font-medium w-20 md:w-24">
-                  {formatDate(day.date)}
-                </div>
-                
-                <motion.div 
-                  className="text-2xl md:text-3xl"
-                  animate={{ 
-                    rotate: [0, 5, -5, 0] 
-                  }}
-                  transition={{ 
-                    duration: 2,
-                    repeat: Infinity,
-                    repeatDelay: index * 0.5 + 3
-                  }}
-                >
-                  {getWeatherIcon(day.weather.main, day.weather.icon)}
-                </motion.div>
-                
-                <div className="hidden md:block">
-                  <div className="text-sm text-white/80 capitalize">
-                    {day.weather.description}
-                  </div>
-                </div>
-              </div>
+            {/* Date */}
+            <span className="text-xs font-medium text-slate-300 w-16 shrink-0">{formatDate(day.date)}</span>
 
-              {/* Temperature Range */}
-              <div className="flex items-center space-x-6">
-                {/* Mobile: Simplified View */}
-                <div className="md:hidden">
-                  <div className="text-right">
-                    <div className="font-bold text-lg">
-                      {formatTemperature(day.temperature.max, tempUnit)}
-                    </div>
-                    <div className="text-white/60 text-sm">
-                      {formatTemperature(day.temperature.min, tempUnit)}
-                    </div>
-                  </div>
-                </div>
+            {/* Icon */}
+            <span className="text-xl w-8 text-center">{getWeatherIcon(day.weather.main, day.weather.icon)}</span>
 
-                {/* Desktop: Detailed View */}
-                <div className="hidden md:flex items-center space-x-4">
-                  {/* Temperature Trend */}
-                  <div className="flex items-center space-x-2">
-                    <TrendingUp className="w-4 h-4 text-red-300" />
-                    <span className="font-bold text-lg">
-                      {formatTemperature(day.temperature.max, tempUnit)}
-                    </span>
-                  </div>
-                  
-                  <div className="text-white/40">/</div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <TrendingDown className="w-4 h-4 text-blue-300" />
-                    <span className="text-white/80">
-                      {formatTemperature(day.temperature.min, tempUnit)}
-                    </span>
-                  </div>
+            {/* Condition */}
+            <span className="text-xs text-slate-400 capitalize hidden md:block w-28 truncate">{day.weather.description}</span>
 
-                  {/* Additional Details */}
-                  <div className="text-right text-sm text-white/60 min-w-0">
-                    <div>💧 {day.humidity}%</div>
-                    <div>💨 {day.wind.speed} m/s {getWindDirection(day.wind.direction)}</div>
-                  </div>
-                </div>
-              </div>
+            {/* Rain chance */}
+            <div className="flex items-center gap-1 text-xs text-blue-400/70 w-12 hidden sm:flex">
+              <Droplets size={10} />
+              <span>{day.rain_chance || 0}%</span>
             </div>
 
-            {/* Mobile: Additional Details (Collapsible) */}
-            <div className="md:hidden mt-3 pt-3 border-t border-white/20">
-              <div className="grid grid-cols-2 gap-4 text-xs text-white/70">
-                <div>
-                  <span className="text-white/80 capitalize">{day.weather.description}</span>
-                </div>
-                <div className="text-right">
-                  💧 {day.humidity}% • 💨 {day.wind.speed} m/s
-                </div>
+            {/* Temp bar */}
+            <div className="flex-1 flex items-center gap-2 min-w-0">
+              <span className="text-xs text-slate-500 w-8 text-right">{formatTemperature(day.temperature.min, tempUnit)}</span>
+              <div className="flex-1 h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-400 to-orange-400"
+                  style={{ width: `${Math.min(100, Math.max(20, ((day.temperature.max - day.temperature.min) / 40) * 100))}%` }}
+                />
               </div>
+              <span className="text-xs font-medium text-white w-8">{formatTemperature(day.temperature.max, tempUnit)}</span>
             </div>
           </motion.div>
         ))}
       </div>
 
-      {/* Summary Statistics */}
-      <motion.div 
-        variants={itemVariants}
-        className="mt-6 pt-6 border-t border-white/20"
-      >
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <div>
-            <div className="text-xs text-white/60 mb-1">Avg High</div>
-            <div className="font-semibold">
-              {formatTemperature(
-                Math.round(
-                  data.forecast.reduce((sum, day) => sum + day.temperature.max, 0) / 
-                  data.forecast.length
-                )
-              )}
-            </div>
+      {/* Summary */}
+      <div className="grid grid-cols-4 gap-3 mt-5 pt-4 border-t border-white/[0.06]">
+        {[
+          { label: 'Avg High', value: formatTemperature(Math.round(data.forecast.reduce((s,d) => s+d.temperature.max,0)/data.forecast.length), tempUnit) },
+          { label: 'Avg Low', value: formatTemperature(Math.round(data.forecast.reduce((s,d) => s+d.temperature.min,0)/data.forecast.length), tempUnit) },
+          { label: 'Avg Humidity', value: `${Math.round(data.forecast.reduce((s,d) => s+d.humidity,0)/data.forecast.length)}%` },
+          { label: 'Avg Wind', value: `${Math.round(data.forecast.reduce((s,d) => s+d.wind.speed,0)/data.forecast.length*10)/10} ${windUnit}` },
+        ].map(({ label, value }) => (
+          <div key={label} className="text-center">
+            <p className="text-[10px] text-slate-500 mb-0.5">{label}</p>
+            <p className="text-xs font-semibold text-white">{value}</p>
           </div>
-          
-          <div>
-            <div className="text-xs text-white/60 mb-1">Avg Low</div>
-            <div className="font-semibold">
-              {formatTemperature(
-                Math.round(
-                  data.forecast.reduce((sum, day) => sum + day.temperature.min, 0) / 
-                  data.forecast.length
-                )
-              )}
-            </div>
-          </div>
-          
-          <div>
-            <div className="text-xs text-white/60 mb-1">Avg Humidity</div>
-            <div className="font-semibold">
-              {Math.round(
-                data.forecast.reduce((sum, day) => sum + day.humidity, 0) / 
-                data.forecast.length
-              )}%
-            </div>
-          </div>
-          
-          <div>
-            <div className="text-xs text-white/60 mb-1">Avg Wind</div>
-            <div className="font-semibold">
-              {Math.round(
-                (data.forecast.reduce((sum, day) => sum + day.wind.speed, 0) / 
-                data.forecast.length) * 10
-              ) / 10} m/s
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Cached Data Indicator */}
-      {data.cached && (
-        <motion.div 
-          variants={itemVariants}
-          className="mt-4 text-center"
-        >
-          <div className="text-xs text-white/50 bg-white/10 rounded-full px-3 py-1 inline-block">
-            ⚡ Cached data for faster loading
-          </div>
-        </motion.div>
-      )}
+        ))}
+      </div>
     </motion.div>
   );
 };

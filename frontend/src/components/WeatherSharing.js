@@ -10,267 +10,126 @@ const WeatherSharing = ({ weatherData, forecastData, onClose }) => {
 
   const generateShareText = useCallback(() => {
     if (!weatherData) return '';
-    
-    const greeting = getTimeGreeting();
+    const greeting = getTimeGreeting(weatherData?.localTime?.time);
     const temp = formatTemperature(weatherData.temperature.current);
-    const condition = weatherData.weather.description;
-    const city = weatherData.city;
-    const country = weatherData.country;
-    
-    return `🌤️ ${greeting}! It's ${temp} and ${condition} in ${city}, ${country}. Check out the full forecast! #Weather #${city.replace(/\s+/g, '')}`;
+    return `🌤️ ${greeting}! It's ${temp} and ${weatherData.weather.description} in ${weatherData.city}, ${weatherData.country}. #Weather #${weatherData.city.replace(/\s+/g, '')}`;
   }, [weatherData]);
 
   const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(shareText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
+    try { await navigator.clipboard.writeText(shareText); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    catch (e) { console.error('Copy failed:', e); }
   };
 
   const shareOnSocial = (platform) => {
-    const text = shareText;
-    const url = window.location.href;
-    
-    let shareUrl = '';
-    switch (platform) {
-      case 'twitter':
-        shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
-        break;
-      case 'facebook':
-        shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`;
-        break;
-      case 'whatsapp':
-        shareUrl = `https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`;
-        break;
-      default:
-        return;
-    }
-    
-    window.open(shareUrl, '_blank', 'width=600,height=400');
+    const text = shareText, url = window.location.href;
+    const urls = {
+      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`,
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`,
+    };
+    if (urls[platform]) window.open(urls[platform], '_blank', 'width=600,height=400');
   };
+
+  const generateCard = useCallback(() => {
+    if (!canvasRef.current || !weatherData) return;
+    const c = canvasRef.current, ctx = c.getContext('2d');
+    c.width = 800; c.height = 400;
+    const g = ctx.createLinearGradient(0, 0, 800, 400);
+    g.addColorStop(0, '#0B1220'); g.addColorStop(0.5, '#1e3a5f'); g.addColorStop(1, '#2563eb');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 800, 400);
+    // overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(0, 0, 800, 400);
+    // icon
+    ctx.font = '64px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(getWeatherIcon(weatherData.weather.main, weatherData.weather.icon), 180, 130);
+    // temp
+    ctx.font = '800 56px Inter, Arial'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.fillText(formatTemperature(weatherData.temperature.current), 180, 210);
+    // desc
+    ctx.font = '500 18px Inter, Arial'; ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillText(weatherData.weather.description, 180, 245);
+    // city
+    ctx.font = '400 14px Inter, Arial'; ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(`${weatherData.city}, ${weatherData.country}`, 180, 275);
+    // details
+    ctx.textAlign = 'left'; ctx.font = '400 14px Inter, Arial'; ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    let y = 100;
+    const details = [
+      `Feels like ${formatTemperature(weatherData.temperature.feels_like)}`,
+      `Humidity: ${weatherData.humidity}%`,
+      `Wind: ${weatherData.wind.speed} ${weatherData.units==='imperial'?'mph':'m/s'}`,
+      `Pressure: ${weatherData.pressure} hPa`,
+      `Visibility: ${weatherData.visibility} ${weatherData.units==='imperial'?'mi':'km'}`,
+    ];
+    details.forEach(t => { ctx.fillText(t, 450, y); y += 32; });
+    // footer
+    ctx.font = '400 11px Inter, Arial'; ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.textAlign = 'center';
+    ctx.fillText(`WeatherApp · ${new Date().toLocaleDateString()}`, 400, 380);
+  }, [weatherData]);
 
   const downloadImage = () => {
     if (!canvasRef.current || !weatherData) return;
-    
-    const canvas = canvasRef.current;
     const link = document.createElement('a');
     link.download = `weather-${weatherData.city}-${new Date().toISOString().split('T')[0]}.png`;
-    link.href = canvas.toDataURL();
+    link.href = canvasRef.current.toDataURL();
     link.click();
   };
 
-  const generateWeatherCard = useCallback(() => {
-    if (!canvasRef.current || !weatherData) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const width = 800;
-    const height = 400;
-    
-    canvas.width = width;
-    canvas.height = height;
-    
-    // Background gradient
-    const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, '#1e3a8a');
-    gradient.addColorStop(1, '#3b82f6');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-    
-    // Weather icon
-    const icon = getWeatherIcon(weatherData.weather.main, weatherData.weather.icon);
-    ctx.font = '80px Arial';
-    ctx.fillStyle = 'white';
-    ctx.textAlign = 'center';
-    ctx.fillText(icon, 200, 120);
-    
-    // Temperature
-    ctx.font = 'bold 48px Arial';
-    ctx.fillStyle = 'white';
-    ctx.fillText(formatTemperature(weatherData.temperature.current), 200, 200);
-    
-    // Condition
-    ctx.font = '24px Arial';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.fillText(weatherData.weather.description, 200, 240);
-    
-    // City and country
-    ctx.font = '20px Arial';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.fillText(`${weatherData.city}, ${weatherData.country}`, 200, 270);
-    
-    // Right side details
-    ctx.textAlign = 'left';
-    ctx.font = '18px Arial';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    
-    let y = 100;
-    ctx.fillText(`Feels like: ${formatTemperature(weatherData.temperature.feels_like)}`, 450, y);
-    y += 30;
-    ctx.fillText(`Humidity: ${weatherData.humidity}%`, 450, y);
-    y += 30;
-    ctx.fillText(`Wind: ${weatherData.wind.speed} ${weatherData.units === 'imperial' ? 'mph' : 'm/s'}`, 450, y);
-    y += 30;
-    ctx.fillText(`Pressure: ${weatherData.pressure} hPa`, 450, y);
-    y += 30;
-    ctx.fillText(`Visibility: ${weatherData.visibility} ${weatherData.units === 'imperial' ? 'miles' : 'km'}`, 500, y);
-    
-    // Timestamp
-    ctx.font = '14px Arial';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.textAlign = 'center';
-    ctx.fillText(`Generated on ${new Date().toLocaleString()}`, width/2, height - 20);
-  }, [weatherData]);
-
   React.useEffect(() => {
     setShareText(generateShareText());
-    if (weatherData) {
-      generateWeatherCard();
-    }
-  }, [weatherData, generateShareText, generateWeatherCard]);
+    if (weatherData) generateCard();
+  }, [weatherData, generateShareText, generateCard]);
 
   if (!weatherData) {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="weather-card p-6 max-w-4xl mx-auto"
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Share2 className="text-green-300" size={28} />
-            Share Weather Report
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-2 text-white/60 hover:text-white transition"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="text-center py-8 text-white/60">
-          <div className="text-4xl mb-2">🌤️</div>
-          <p>No weather data available</p>
-          <p className="text-sm">Please search for a city first</p>
-        </div>
-      </motion.div>
+      <div className="text-center py-16">
+        <Share2 size={32} className="mx-auto mb-3 text-slate-600" />
+        <p className="text-sm text-slate-400">Search for a city first to share weather</p>
+      </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="weather-card p-6 max-w-4xl mx-auto"
-    >
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Share2 className="text-green-300" size={28} />
-          Share Weather Report
-        </h3>
-        <button
-          onClick={onClose}
-          className="p-2 text-white/60 hover:text-white transition"
-        >
-          ✕
-        </button>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2"><Share2 size={18} className="text-brand-emerald" /> Share Weather</h3>
+        {onClose && <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">✕</button>}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Share Options */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="space-y-4">
           <div>
-            <h4 className="text-lg font-semibold text-white mb-3">Share Text</h4>
-            <textarea
-              value={shareText}
-              onChange={(e) => setShareText(e.target.value)}
-              className="w-full h-32 p-3 rounded-lg bg-white/10 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              placeholder="Customize your weather share message..."
-            />
+            <label className="text-xs font-medium text-slate-400 mb-2 block">Share Message</label>
+            <textarea value={shareText} onChange={e => setShareText(e.target.value)}
+              className="input-field h-28 resize-none text-xs leading-relaxed" />
           </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={copyToClipboard}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
-            >
-              <Copy size={16} />
-              {copied ? 'Copied!' : 'Copy Text'}
-            </button>
-          </div>
-
+          <button onClick={copyToClipboard} className="btn-primary w-full flex items-center justify-center gap-2">
+            <Copy size={14} /> {copied ? '✓ Copied!' : 'Copy Text'}
+          </button>
           <div>
-            <h4 className="text-lg font-semibold text-white mb-3">Share on Social Media</h4>
-            <div className="flex gap-3">
-              <button
-                onClick={() => shareOnSocial('twitter')}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-400 hover:bg-blue-500 text-white rounded-lg transition"
-              >
-                <Twitter size={16} />
-                Twitter
-              </button>
-              <button
-                onClick={() => shareOnSocial('facebook')}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-              >
-                <Facebook size={16} />
-                Facebook
-              </button>
-              <button
-                onClick={() => shareOnSocial('whatsapp')}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition"
-              >
-                <MessageCircle size={16} />
-                WhatsApp
-              </button>
+            <label className="text-xs font-medium text-slate-400 mb-2 block">Share on</label>
+            <div className="flex gap-2">
+              {[
+                { p: 'twitter', icon: Twitter, label: 'Twitter', bg: 'bg-[#1DA1F2]/10 hover:bg-[#1DA1F2]/20 text-[#1DA1F2]' },
+                { p: 'facebook', icon: Facebook, label: 'Facebook', bg: 'bg-[#4267B2]/10 hover:bg-[#4267B2]/20 text-[#4267B2]' },
+                { p: 'whatsapp', icon: MessageCircle, label: 'WhatsApp', bg: 'bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366]' },
+              ].map(({ p, icon: I, label, bg }) => (
+                <button key={p} onClick={() => shareOnSocial(p)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium transition-all ${bg}`}
+                ><I size={14} />{label}</button>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Weather Card Preview */}
         <div>
-          <h4 className="text-lg font-semibold text-white mb-3">Weather Card Preview</h4>
-          <div className="bg-white/10 rounded-lg p-4">
-            <canvas
-              ref={canvasRef}
-              className="w-full h-auto rounded-lg border border-white/20"
-            />
-            <button
-              onClick={downloadImage}
-              className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition"
-            >
-              <Download size={16} />
-              Download Image
+          <label className="text-xs font-medium text-slate-400 mb-2 block">Weather Card Preview</label>
+          <div className="glass-effect p-3">
+            <canvas ref={canvasRef} className="w-full h-auto rounded-xl" />
+            <button onClick={downloadImage} className="btn-primary w-full mt-3 flex items-center justify-center gap-2 text-xs">
+              <Download size={14} /> Download Image
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Quick Share Links */}
-      <div className="mt-6 p-4 bg-white/10 rounded-lg">
-        <h4 className="text-lg font-semibold text-white mb-3">Quick Share Links</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <button
-            onClick={() => shareOnSocial('twitter')}
-            className="p-3 bg-blue-400 hover:bg-blue-500 text-white rounded-lg transition text-center"
-          >
-            Share on Twitter
-          </button>
-          <button
-            onClick={() => shareOnSocial('facebook')}
-            className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-center"
-          >
-            Share on Facebook
-          </button>
-          <button
-            onClick={() => shareOnSocial('whatsapp')}
-            className="p-3 bg-green-500 hover:bg-green-600 text-white rounded-lg transition text-center"
-          >
-            Share on WhatsApp
-          </button>
         </div>
       </div>
     </motion.div>

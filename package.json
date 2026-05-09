@@ -12,7 +12,7 @@
     "build": "cd frontend && npm run build",
     "start": "cd backend && npm start",
     "test": "cd frontend && npm test",
-    "setup": "npm run install-all && echo 'Setup complete! Please add your OpenWeatherMap API key to backend/.env'"
+    "setup": "npm run install-all && echo 'Setup complete! Please add your WeatherAPI.com API key to backend/.env'"
   },
   "keywords": [
     "weather",
@@ -21,7 +21,7 @@
     "express",
     "tailwindcss",
     "framer-motion",
-    "openweathermap"
+    "weatherapi"
   ],
   "author": "Weather App",
   "license": "MIT",

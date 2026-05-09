@@ -8,130 +8,44 @@ export const getWeatherBackground = (weatherMain, isDark = false) => {
   if (isDark) {
     // Substring-aware detection for WeatherAPI text like "Light rain shower"
     if (has('clear')) return 'bg-clear-night-gradient';
-    if (has('cloud')) return 'bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900';
-    if (has('rain') || has('drizzle') || has('shower') || has('thunder')) return 'bg-gradient-to-br from-gray-700 via-slate-800 to-gray-900';
+    if (has('cloud') || has('overcast')) return 'bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900';
+    if (has('thunder') || has('storm')) return 'bg-gradient-to-br from-gray-900 via-slate-900 to-black';
+    if (has('rain') || has('drizzle') || has('shower')) return 'bg-gradient-to-br from-gray-700 via-slate-800 to-gray-900';
     if (has('snow') || has('sleet') || has('blizzard')) return 'bg-gradient-to-br from-slate-600 via-gray-700 to-slate-800';
     if (has('mist') || has('fog') || has('haze')) return 'bg-gradient-to-br from-gray-700 via-slate-700 to-gray-800';
-    switch (text) {
-      case 'clear':
-        return 'bg-clear-night-gradient';
-      case 'clouds':
-        return 'bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900';
-      case 'rain':
-      case 'drizzle':
-        return 'bg-gradient-to-br from-gray-700 via-slate-800 to-gray-900';
-      case 'thunderstorm':
-        return 'bg-gradient-to-br from-gray-900 via-slate-900 to-black';
-      case 'snow':
-        return 'bg-gradient-to-br from-slate-600 via-gray-700 to-slate-800';
-      case 'mist':
-      case 'fog':
-      case 'haze':
-        return 'bg-gradient-to-br from-gray-700 via-slate-700 to-gray-800';
-      default:
-        return 'bg-default-dark-gradient';
-    }
+    return 'bg-default-dark-gradient';
   }
   
-  // Light mode backgrounds (substring-aware first)
-  if (has('clear')) return 'bg-sunny-gradient';
-  if (has('cloud')) return 'bg-cloudy-gradient';
-  if (has('rain') || has('drizzle') || has('shower') || has('thunder')) return 'bg-rainy-gradient';
+  // Light mode backgrounds
+  if (has('clear') || has('sunny')) return 'bg-sunny-gradient';
+  if (has('cloud') || has('overcast')) return 'bg-cloudy-gradient';
+  if (has('thunder') || has('storm')) return 'bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900';
+  if (has('rain') || has('drizzle') || has('shower')) return 'bg-rainy-gradient';
   if (has('snow') || has('sleet') || has('blizzard')) return 'bg-snowy-gradient';
   if (has('mist') || has('fog') || has('haze')) return 'bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500';
-  switch (text) {
-    case 'clear':
-      return 'bg-sunny-gradient';
-    case 'clouds':
-      return 'bg-cloudy-gradient';
-    case 'rain':
-    case 'drizzle':
-      return 'bg-rainy-gradient';
-    case 'thunderstorm':
-      return 'bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900';
-    case 'snow':
-      return 'bg-snowy-gradient';
-    case 'mist':
-    case 'fog':
-    case 'haze':
-      return 'bg-gradient-to-br from-gray-400 via-gray-300 to-gray-500';
-    default:
-      return 'bg-default-gradient';
-  }
+  return 'bg-default-gradient';
 };
 
-// Map weather conditions to icons
+// Map weather conditions to icons — day/night aware
+// WeatherAPI icon URLs contain '/day/' or '/night/' which we use for detection
 export const getWeatherIcon = (weatherMain, weatherIcon) => {
   const text = weatherMain?.toLowerCase() || '';
-  const has = (keyword) => text.includes(keyword);
-  const iconCode = weatherIcon;
-  
-  // Use OpenWeatherMap icon codes for more accurate representation
-  const iconMap = {
-    '01d': '☀️', // clear sky day
-    '01n': '🌙', // clear sky night
-    '02d': '⛅', // few clouds day
-    '02n': '☁️', // few clouds night
-    '03d': '☁️', // scattered clouds
-    '03n': '☁️',
-    '04d': '☁️', // broken clouds
-    '04n': '☁️',
-    '09d': '🌧️', // shower rain
-    '09n': '🌧️',
-    '10d': '🌦️', // rain day
-    '10n': '🌧️', // rain night
-    '11d': '⛈️', // thunderstorm
-    '11n': '⛈️',
-    '13d': '❄️', // snow
-    '13n': '❄️',
-    '50d': '🌫️', // mist
-    '50n': '🌫️'
-  };
-  
-  if (iconCode && iconMap[iconCode]) {
-    return iconMap[iconCode];
-  }
-  
-  // Smart substring detection for WeatherAPI text like "Light Rain Shower"
+  const has = (k) => text.includes(k);
+  const isNight = typeof weatherIcon === 'string' && weatherIcon.includes('night');
+
+  if (has('thunder') || has('storm'))  return '⛈️';
+  if (has('blizzard'))                 return '🌨️';
+  if (has('snow') || has('sleet'))     return has('heavy') ? '❄️' : '🌨️';
   if (has('rain') || has('drizzle') || has('shower')) {
-    if (has('light') || has('drizzle')) return '🌦️'; // Light rain/drizzle
-    if (has('heavy') || has('intense')) return '🌧️'; // Heavy rain
-    if (has('thunder') || has('storm')) return '⛈️'; // Thunderstorm
-    return '🌧️'; // Default rain
+    if (has('thunder'))                return '⛈️';
+    return isNight ? '🌧️' : '🌦️';
   }
-  
-  if (has('snow') || has('sleet') || has('blizzard')) {
-    if (has('light')) return '🌨️'; // Light snow
-    if (has('heavy') || has('intense')) return '❄️'; // Heavy snow
-    return '❄️'; // Default snow
-  }
-  
-  if (has('thunder') || has('storm')) return '⛈️';
-  if (has('clear') || has('sunny')) return '☀️';
-  if (has('cloud') || has('overcast')) return '☁️';
-  if (has('mist') || has('fog') || has('haze')) return '🌫️';
-  
-  // Fallback to exact condition matching
-  switch (text) {
-    case 'clear':
-      return '☀️';
-    case 'clouds':
-      return '☁️';
-    case 'rain':
-      return '🌧️';
-    case 'drizzle':
-      return '🌦️';
-    case 'thunderstorm':
-      return '⛈️';
-    case 'snow':
-      return '❄️';
-    case 'mist':
-    case 'fog':
-    case 'haze':
-      return '🌫️';
-    default:
-      return '🌤️';
-  }
+  if (has('mist') || has('fog') || has('haze')) return '🌁';
+  if (has('overcast'))                 return '☁️';
+  if (has('cloud') || has('partly'))   return isNight ? '☁️' : '⛅';
+  if (has('clear') || has('sunny'))    return isNight ? '🌙' : '☀️';
+
+  return isNight ? '🌙' : '🌤️';
 };
 
 // Get wind direction from degrees
@@ -195,18 +109,32 @@ export const getWeatherTextColor = (weatherMain, isDark = false) => {
 };
 
 // Get time-based greeting
-export const getTimeGreeting = () => {
-  const hour = new Date().getHours();
-  
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  if (hour < 21) return 'Good evening';
-  return 'Good night';
+// Accepts an optional localTimeString like "2026-05-10 14:30" from WeatherAPI
+export const getTimeGreeting = (localTimeString = null) => {
+  let hour;
+  if (localTimeString) {
+    const match = localTimeString.match(/(\d{1,2}):\d{2}\s*$/);
+    if (match) {
+      hour = parseInt(match[1], 10);
+    } else {
+      hour = new Date().getHours();
+    }
+  } else {
+    hour = new Date().getHours();
+  }
+
+  if (hour >= 5 && hour < 12)  return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 21) return 'Good evening';
+  return 'Good night'; // 9 PM – 5 AM
 };
 
 // Format date for display
 export const formatDate = (dateString) => {
-  const date = new Date(dateString);
+  // Append T00:00:00 for date-only strings to avoid UTC midnight parsing issues
+  const date = (dateString && !dateString.includes('T') && !dateString.includes(' '))
+    ? new Date(dateString + 'T00:00:00')
+    : new Date(dateString);
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -317,23 +245,39 @@ export const getCOLevel = (value) => {
 export const debounce = (func, wait) => {
   let timeout;
   return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
     clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
+    timeout = setTimeout(() => func(...args), wait);
   };
 };
 
 // Check if it's daytime based on sunrise/sunset
-export const isDaytime = (sunrise, sunset, timezone = 0) => {
-  const now = new Date();
-  const currentTime = now.getTime() + (timezone * 1000);
-  const sunriseTime = new Date(sunrise).getTime();
-  const sunsetTime = new Date(sunset).getTime();
+// Handles WeatherAPI "hh:mm AM/PM" format and optional localTimeString "YYYY-MM-DD HH:MM"
+export const isDaytime = (sunrise, sunset, localTimeString = null) => {
+  const toMinutes = (t) => {
+    if (!t) return null;
+    const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(t.trim());
+    if (!match) return null;
+    let hours = parseInt(match[1], 10) % 12;
+    const minutes = parseInt(match[2], 10);
+    if (match[3].toUpperCase() === 'PM') hours += 12;
+    return hours * 60 + minutes;
+  };
   
-  return currentTime >= sunriseTime && currentTime <= sunsetTime;
+  const sr = toMinutes(sunrise);
+  const ss = toMinutes(sunset);
+  if (sr == null || ss == null) return true; // default to daytime if can't parse
+  
+  let nowMinutes;
+  if (localTimeString) {
+    const match = localTimeString.match(/(\d{1,2}):(\d{2})\s*$/);
+    nowMinutes = match ? parseInt(match[1], 10) * 60 + parseInt(match[2], 10) : null;
+  }
+  if (nowMinutes == null) {
+    const now = new Date();
+    nowMinutes = now.getHours() * 60 + now.getMinutes();
+  }
+  
+  return nowMinutes >= sr && nowMinutes <= ss;
 };
 
 const weatherUtils = {

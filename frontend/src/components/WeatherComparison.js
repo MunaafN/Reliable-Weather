@@ -1,218 +1,129 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { GitCompare, Plus, Trash2, Droplets, Wind, Thermometer, Cloud, Eye, Sun } from 'lucide-react';
 import { weatherApi } from '../services/weatherApi';
-import { getWeatherIcon, formatTemperature, getWindDirection } from '../utils/weatherUtils';
+import { getWeatherIcon, formatTemperature } from '../utils/weatherUtils';
 
-const WeatherComparison = ({ onClose }) => {
+const WeatherComparison = ({ onClose, units = 'metric' }) => {
   const [cities, setCities] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [maxCities] = useState(4);
+  const [input, setInput] = useState('');
+  const maxCities = 4;
 
-  const addCity = async (cityName) => {
-    if (cities.length >= maxCities) return;
-    
-    setLoading(true);
-    setError(null);
-    
+  const addCity = async (name) => {
+    if (!name.trim() || cities.length >= maxCities) return;
+    if (cities.find(c => c.name.toLowerCase() === name.toLowerCase())) { setError('City already added'); setTimeout(() => setError(null), 2000); return; }
+    setLoading(true); setError(null);
     try {
-      const [current, forecast] = await Promise.all([
-        weatherApi.getCurrentWeather(cityName),
-        weatherApi.getForecast(cityName)
-      ]);
-      
-      const newCity = {
-        id: Date.now(),
-        name: cityName,
-        current,
-        forecast,
-        timestamp: new Date()
-      };
-      
-      setCities(prev => [...prev, newCity]);
-    } catch (err) {
-      setError(`Failed to add ${cityName}: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+      const [current, forecast] = await Promise.all([weatherApi.getCurrentWeather(name, units), weatherApi.getForecast(name, units)]);
+      setCities(p => [...p, { id: Date.now(), name: current.city, current, forecast, timestamp: new Date() }]);
+    } catch { setError(`Could not find "${name}"`); setTimeout(() => setError(null), 3000); }
+    finally { setLoading(false); }
   };
 
-  const removeCity = (cityId) => {
-    setCities(prev => prev.filter(city => city.id !== cityId));
-  };
+  const removeCity = (id) => setCities(p => p.filter(c => c.id !== id));
 
-
-
-  const refreshAll = async () => {
+  useEffect(() => {
     if (cities.length === 0) return;
-    
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const updatedCities = await Promise.all(
-        cities.map(async (city) => {
-          const [current, forecast] = await Promise.all([
-            weatherApi.getCurrentWeather(city.name),
-            weatherApi.getForecast(city.name)
-          ]);
-          return { ...city, current, forecast, timestamp: new Date() };
-        })
-      );
-      
-      setCities(updatedCities);
-    } catch (err) {
-      setError('Failed to refresh some cities');
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Refresh cities when units change
+    const refreshAll = async () => {
+      try {
+        const updated = await Promise.all(cities.map(async c => {
+          const [current, forecast] = await Promise.all([weatherApi.getCurrentWeather(c.name, units), weatherApi.getForecast(c.name, units)]);
+          return { ...c, current, forecast, timestamp: new Date() };
+        }));
+        setCities(updated);
+      } catch {}
+    };
+    refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [units]);
 
-  if (cities.length === 0) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="weather-card p-8 text-center"
-      >
-        <h3 className="text-2xl font-bold text-white mb-4">Weather Comparison</h3>
-        <p className="text-white/80 mb-6">
-          Compare weather conditions between multiple cities
-        </p>
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Enter city name..."
-            className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-white/60 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.target.value.trim()) {
-                addCity(e.target.value.trim());
-                e.target.value = '';
-              }
-            }}
-          />
-          <button
-            onClick={() => onClose()}
-            className="px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30 transition"
-          >
-            Close
-          </button>
-        </div>
-      </motion.div>
-    );
-  }
+  const tempUnit = units === 'imperial' ? 'F' : 'C';
+  const windUnit = units === 'imperial' ? 'mph' : 'm/s';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="weather-card p-6"
-    >
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl font-bold text-white">Weather Comparison</h3>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={refreshAll}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-500 text-white rounded-lg transition"
-          >
-            {loading ? 'Refreshing...' : 'Refresh All'}
-          </button>
-          <button
-            onClick={onClose}
-            className="p-2 text-white/60 hover:text-white transition"
-          >
-            <X size={20} />
-          </button>
-        </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+      {/* Add city */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && input.trim()) { addCity(input.trim()); setInput(''); } }}
+          placeholder="Add city to compare..."
+          className="input-field flex-1"
+          disabled={loading || cities.length >= maxCities}
+        />
+        <button
+          onClick={() => { if (input.trim()) { addCity(input.trim()); setInput(''); } }}
+          disabled={loading || !input.trim() || cities.length >= maxCities}
+          className="btn-primary flex items-center gap-1.5 disabled:opacity-40"
+        >
+          <Plus size={14} /> Add
+        </button>
       </div>
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-200">
-          {error}
+      {error && <p className="text-xs text-brand-red">{error}</p>}
+
+      {/* City cards */}
+      {cities.length === 0 ? (
+        <div className="text-center py-16">
+          <GitCompare size={32} className="mx-auto mb-3 text-slate-600" />
+          <p className="text-sm text-slate-400">Add cities to compare weather</p>
+          <p className="text-xs text-slate-600 mt-1">Up to {maxCities} cities side by side</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {cities.map((city, i) => (
+            <motion.div key={city.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}
+              className="weather-card p-5 relative group"
+            >
+              <button onClick={() => removeCity(city.id)} className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-slate-500 hover:text-brand-red transition-all">
+                <Trash2 size={13} />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-3xl">{getWeatherIcon(city.current.weather.main, city.current.weather.icon)}</span>
+                <div>
+                  <h4 className="text-sm font-semibold text-white">{city.current.city}</h4>
+                  <p className="text-[10px] text-slate-500">{city.current.country}</p>
+                </div>
+              </div>
+
+              <div className="text-3xl font-bold text-white mb-1">{formatTemperature(city.current.temperature.current, tempUnit)}</div>
+              <p className="text-xs text-slate-400 capitalize mb-4">{city.current.weather.description}</p>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  { icon: Thermometer, l: 'Feels', v: formatTemperature(city.current.temperature.feels_like, tempUnit) },
+                  { icon: Droplets, l: 'Humidity', v: `${city.current.humidity}%` },
+                  { icon: Wind, l: 'Wind', v: `${city.current.wind.speed} ${windUnit}` },
+                  { icon: Eye, l: 'Visibility', v: `${city.current.visibility} ${units==='imperial'?'mi':'km'}` },
+                  { icon: Sun, l: 'UV', v: city.current.uv },
+                  { icon: Cloud, l: 'Clouds', v: `${city.current.clouds}%` },
+                ].map(({ icon: I, l, v }) => (
+                  <div key={l} className="flex items-center gap-1.5 py-1.5 px-2 rounded-lg bg-white/[0.03]">
+                    <I size={11} className="text-slate-500" />
+                    <span className="text-slate-500">{l}</span>
+                    <span className="text-white font-medium ml-auto">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ))}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {cities.map((city) => (
-          <motion.div
-            key={city.id}
-            layout
-            className="glass-effect rounded-xl p-4 relative"
-          >
-            <button
-              onClick={() => removeCity(city.id)}
-              className="absolute top-2 right-2 text-white/60 hover:text-white transition"
-            >
-              <X size={16} />
-            </button>
-            
-            <div className="text-center mb-3">
-              <h4 className="font-semibold text-white text-lg">{city.current.city}</h4>
-              <p className="text-white/60 text-sm">{city.current.country}</p>
-            </div>
-            
-            <div className="flex items-center justify-center mb-3">
-              <div className="text-4xl">
-                {getWeatherIcon(city.current.weather.main, city.current.weather.icon)}
-              </div>
-              <div className="ml-3">
-                <div className="text-2xl font-bold text-white">
-                  {formatTemperature(city.current.temperature.current)}
-                </div>
-                <div className="text-sm text-white/60">
-                  Feels like {formatTemperature(city.current.temperature.feels_like)}
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-white/60">Condition:</span>
-                <span className="text-white capitalize">{city.current.weather.description}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Humidity:</span>
-                <span className="text-white">{city.current.humidity}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Wind:</span>
-                <span className="text-white">
-                  {city.current.wind.speed} {city.current.units === 'imperial' ? 'mph' : 'm/s'} {getWindDirection(city.current.wind.direction)}
-                </span>
-              </div>
-              {city.current.temperature.max != null && city.current.temperature.min != null && (
-                <div className="flex justify-between">
-                  <span className="text-white/60">High/Low:</span>
-                  <span className="text-white">
-                    {formatTemperature(city.current.temperature.max)} / {formatTemperature(city.current.temperature.min)}
-                  </span>
-                </div>
-              )}
-            </div>
-            
-            <div className="mt-3 text-xs text-white/40 text-center">
-              Updated: {city.timestamp.toLocaleTimeString()}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {cities.length < maxCities && (
-        <div className="text-center">
-          <input
-            type="text"
-            placeholder="Add another city..."
-            className="w-full max-w-xs px-4 py-2 rounded-lg bg-white/10 text-white placeholder-white/60 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.target.value.trim()) {
-                addCity(e.target.value.trim());
-                e.target.value = '';
-              }
-            }}
-          />
-        </div>
+      {/* Bottom input */}
+      {cities.length > 0 && cities.length < maxCities && (
+        <input
+          type="text"
+          placeholder="Add another city..."
+          onKeyDown={e => { if (e.key === 'Enter' && e.target.value.trim()) { addCity(e.target.value.trim()); e.target.value = ''; } }}
+          className="input-field text-center text-xs"
+        />
       )}
     </motion.div>
   );
